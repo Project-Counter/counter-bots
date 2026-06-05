@@ -1,6 +1,28 @@
-# ai.robots.txt
+## COUNTER Bots List
 
-<img src="/assets/images/noai-logo.png" width="100" />
+This is the official list of user agents that are regarded as robots/spiders by COUNTER Metrics. It includes the list of AI-related crawlers from the ai.robots.txt repository (https://github.com/ai-robots-txt/ai.robots.txt).
+
+## Purpose of this list
+
+Web crawlers and other bots have the potential to inflate usage statistics. Only genuine, user-driven usage should be reported in COUNTER metrics. This is a non-exclusive list that can be used to determine whether a request is performed by a bot.
+
+## Pull requests
+
+This list is open for extension and anyone can make a new pull request with new additions to this list. When proposing new bots it is important to include the bot name and/or pattern, as well as a description of the bot activity.
+
+## Versioning
+
+Merges of changes to the branch will automatically trigger a new official release by the end of the day. A tag with the date is automatically made when a change is released.
+
+## Format of the list
+
+The list is available in a JSON format as well as in a simplified .txt file. 
+
+## Case insensitivity of pattern-matching
+
+We recommend advice case-insensitive matching, to catch any case-specific iterations of bots. For example, if we want to match 'bot', we can be fairly certain that 'BoT' is to be matched as well. Case insensitive matching thus reduces the number of configs to take into consideration.
+
+## About ai.robots.txt
 
 This list contains AI-related crawlers of all types, regardless of purpose. We encourage you to contribute to and implement this list on your own site. See [information about the listed crawlers](./table-of-bot-metrics.md) and the [FAQ](https://github.com/ai-robots-txt/ai.robots.txt/blob/main/FAQ.md).
 
