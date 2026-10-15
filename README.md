@@ -1,22 +1,25 @@
 # ai.robots.txt
 
-<img src="/assets/images/noai-logo.png" width="100" />
+<img src="/assets/images/noai-logo.png" width="100" alt="No AI entry logo" />
 
 This list contains AI-related crawlers of all types, regardless of purpose. We encourage you to contribute to and implement this list on your own site. See [information about the listed crawlers](./table-of-bot-metrics.md) and the [FAQ](https://github.com/ai-robots-txt/ai.robots.txt/blob/main/FAQ.md).
 
-A number of these crawlers have been sourced from [Dark Visitors](https://darkvisitors.com) and we appreciate the ongoing effort they put in to track these crawlers.
+A number of these crawlers have been sourced from [Known Agents](https://knownagents.com) and we appreciate the ongoing effort they put in to track these crawlers.
 
-If you'd like to add information about a crawler to the list, please make a pull request with the bot name added to `robots.txt`, `ai.txt`, and any relevant details in `table-of-bot-metrics.md` to help people understand what's crawling.
+If you'd like to add an AI-related crawler to the list, please see "Contributing" below.
 
 ## Usage
 
-This repository provides the following files:
-- `robots.txt`
-- `.htaccess`
-- `nginx-block-ai-bots.conf`
-- `Caddyfile`
-- `haproxy-block-ai-bots.txt`
-- `lighttpd-block-ai-bots.conf`
+This repository provides the following files in the top-level directory[^root]:
+
+- [`robots.txt`](./robots.txt)
+- [`.htaccess`](./.htaccess)
+- [`nginx-block-ai-bots.conf`](./nginx-block-ai-bots.conf)
+- [`Caddyfile`](./Caddyfile)
+- [`haproxy-block-ai-bots.txt`](./haproxy-block-ai-bots.txt)
+- [`lighttpd-block-ai-bots.conf`](./lighttpd-block-ai-bots.conf)
+
+[^root]: Other files with similar names appear in the directory `code/test_files`. These files are for test purposes only and you must not use them on your own site.
 
 `robots.txt` implements the Robots Exclusion Protocol ([RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html)).
 
@@ -27,13 +30,16 @@ Note that, as stated in the [httpd documentation](https://httpd.apache.org/docs/
 
 `Caddyfile` includes a Header Regex matcher group you can copy or import into your Caddyfile, the rejection can then be handled as followed `abort @aibots`
 
-`haproxy-block-ai-bots.txt` may be used to configure HAProxy to block AI bots. To implement it;
+`haproxy-block-ai-bots.txt` may be used to configure HAProxy to block AI bots. To implement it:
+
 1. Add the file to the config directory of HAProxy
-2. Add the following lines in the `frontend` section;
+2. Add the following lines in the `frontend` section:
+
    ```
    acl ai_robot hdr_sub(user-agent) -i -f /etc/haproxy/haproxy-block-ai-bots.txt
    http-request deny if ai_robot
    ```
+
    (Note that the path of the `haproxy-block-ai-bots.txt` may be different in your environment.)
 
 `lighttpd-block-ai-bots.conf` can be included with `include "fragments/lighttpd-block-ai-bots.conf"` in your lighttpd configuration either globally or in any conditional section.
@@ -47,15 +53,29 @@ middleware plugin for [Traefik](https://traefik.io/traefik/) to automatically ad
 file on-the-fly.
 
 - Alternatively you can [manually configure Traefik](./docs/traefik-manual-setup.md) to centrally serve a static `robots.txt`.
+
+- [Bot Ledger](https://farrelldan.github.io/ai-bot-directory/): free, static directory of verified AI crawlers with a one-click `robots.txt` and `llms.txt` generator. No signup required.
+
+- [KI-Zugangsindex](https://peppe1337.github.io/ki-zugangsindex/): open dataset on how widely this kind of blocking is actually deployed in the German (`.de`) web, measured on a fixed panel of 600 domains so the same sites can be re-checked over time.
+
+- [AI Crawler Census](https://ai-visibility.lastminutedealshq.com/data): open dataset measuring which of these crawlers the Tranco top 5,000 sites allow or block, with per-domain results published for each run so the same sites can be compared over time. Raw JSON, CC BY 4.0.
+
+- [AI Discovery Radar](https://github.com/flober81/ai-discovery-radar): monthly measurement of how many websites actually publish the files that tell AI systems what they may read or use (`robots.txt`, `llms.txt`, `ai.txt`, `tdmrep.json` and similar), and whether those files can be fetched at all. Open data, CC BY 4.0.
+
 ## Contributing
+
+Please note that AI-generated contributions are not permitted.
 
 A note about contributing: updates should be added/made to `robots.json`. A GitHub action will then generate the updated `robots.txt`, `table-of-bot-metrics.md`, `.htaccess` and `nginx-block-ai-bots.conf`.
 
 You can run the tests by [installing](https://www.python.org/about/gettingstarted/) Python 3, installing the dependencies:
+
 ```console
 pip install -r requirements.txt
 ```
+
 and then issuing:
+
 ```console
 code/tests.py
 ```
@@ -66,21 +86,18 @@ The `.editorconfig` file provides standard editor options for this project. See 
 
 Admins may ship a new release `v1.n` (where `n` increments the minor version of the current release) as follows:
 
-* Navigate to the [new release page](https://github.com/ai-robots-txt/ai.robots.txt/releases/new) on GitHub.
-* Click `Select tag`, choose `Create new tag`, enter `v1.n` in the pop-up, and click `Create`.
-* Enter a suitable release title (e.g. `v1.n: adds user-agent1, user-agent2`).
-* Click `Generate release notes`.
-* Click `Publish release`.
+- Navigate to the [new release page](https://github.com/ai-robots-txt/ai.robots.txt/releases/new) on GitHub.
+- Click `Select tag`, choose `Create new tag`, enter `v1.n` in the pop-up, and click `Create`.
+- Enter a suitable release title (e.g. `v1.n: adds user-agent1, user-agent2`).
+- Click `Generate release notes`.
+- Click `Publish release`.
 
 A GitHub action will then add the asset `robots.txt` to the release. That's it.
 
 ## Subscribe to updates
 
 You can subscribe to list updates via RSS/Atom with the releases feed:
-
-```
-https://github.com/ai-robots-txt/ai.robots.txt/releases.atom
-```
+`https://github.com/ai-robots-txt/ai.robots.txt/releases.atom`.
 
 You can subscribe with [Feedly](https://feedly.com/i/subscription/feed/https://github.com/ai-robots-txt/ai.robots.txt/releases.atom), [Inoreader](https://www.inoreader.com/?add_feed=https://github.com/ai-robots-txt/ai.robots.txt/releases.atom), [The Old Reader](https://theoldreader.com/feeds/subscribe?url=https://github.com/ai-robots-txt/ai.robots.txt/releases.atom), [Feedbin](https://feedbin.me/?subscribe=https://github.com/ai-robots-txt/ai.robots.txt/releases.atom), or any other reader app.
 
@@ -97,6 +114,7 @@ implements RSL as well as payment processing for WordPress sites.
 
 If you use [Cloudflare's hard block](https://blog.cloudflare.com/declaring-your-aindependence-block-ai-bots-scrapers-and-crawlers-with-a-single-click) alongside this list, you can report abusive crawlers that don't respect `robots.txt` [here](https://docs.google.com/forms/d/e/1FAIpQLScbUZ2vlNSdcsb8LyTeSF7uLzQI96s0BKGoJ6wQ6ocUFNOKEg/viewform).
 But even if you don't use Cloudflare's hard block, their list of [verified bots](https://radar.cloudflare.com/traffic/verified-bots) may come in handy.
+
 ## Additional resources
 
 - [Blocking Bots with Nginx](https://rknight.me/blog/blocking-bots-with-nginx/) by Robb Knight
@@ -105,3 +123,4 @@ But even if you don't use Cloudflare's hard block, their list of [verified bots]
 - [Blockin' bots on Netlify](https://www.jeremiak.com/blog/block-bots-netlify-edge-functions/) by Jeremia Kimelman
 - [Blocking AI web crawlers](https://underlap.org/blocking-ai-web-crawlers) by Glyn Normington
 - [Block AI Bots from Crawling Websites Using Robots.txt](https://originality.ai/ai-bot-blocking) by Jonathan Gillham, Originality.AI
+- [AI Access Checker: see which AI crawlers a site's robots.txt allows or blocks](https://www.greadme.com/ai-access-checker) by Saar Twito, Greadme

@@ -2,9 +2,23 @@
 """To run these tests just execute this script."""
 
 import json
+import re
 import unittest
 
-from robots import json_to_txt, json_to_table, json_to_htaccess, json_to_nginx, json_to_haproxy, json_to_caddy, json_to_lighttpd, consolidate, default_values, default_value
+from robots import (
+    consolidate,
+    existing_key,
+    default_value,
+    default_values,
+    json_to_caddy,
+    json_to_haproxy,
+    json_to_htaccess,
+    json_to_lighttpd,
+    json_to_nginx,
+    json_to_table,
+    json_to_txt,
+    list_to_pcre,
+)
 
 class RobotsUnittestExtensions:
     def loadJson(self, pathname):
@@ -15,7 +29,7 @@ class RobotsUnittestExtensions:
         with open(f, "rt") as f:
             f_contents = f.read()
 
-        return self.assertMultiLineEqual(f_contents, s)
+        return self.assertMultiLineEqual(f_contents.rstrip("\r\n"), s.rstrip("\r\n"))
 
 
 class TestRobotsTXTGeneration(unittest.TestCase, RobotsUnittestExtensions):
@@ -49,6 +63,83 @@ class TestHtaccessGeneration(unittest.TestCase, RobotsUnittestExtensions):
     def test_htaccess_generation(self):
         robots_htaccess = json_to_htaccess(self.robots_dict)
         self.assertEqualsFile("test_files/.htaccess", robots_htaccess)
+
+
+class TestUserAgentPatternGeneration(unittest.TestCase):
+    def test_agents_match_user_agents_by_prefix_or_substring(self):
+        pattern = re.compile(
+            list_to_pcre({"Spider": {}, "ExampleBot": {}}), re.IGNORECASE
+        )
+
+        self.assertIsNotNone(pattern.search("Spider"))
+        self.assertIsNotNone(pattern.search("spider"))
+        self.assertIsNotNone(pattern.search("Mozilla/5.0 ExampleBot/1.0"))
+
+    def test_generated_regex_against_real_user_agents(self):
+        from pathlib import Path
+        robots_json_path = Path(__file__).parent.parent / "robots.json"
+        if robots_json_path.exists():
+            with open(robots_json_path, "rt", encoding="utf-8") as f:
+                robots_dict = json.load(f)
+        else:
+            robots_dict = self.loadJson("test_files/robots.json")
+
+        pattern = re.compile(list_to_pcre(robots_dict), re.IGNORECASE)
+
+        user_agents = [
+            "CCBot/2.0 (https://commoncrawl.org/faq/)",
+            "Claude-User (claude-code/2.1.220; +https://support.anthropic.com/)",
+            "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+            "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)",
+            "Scrapy/2.16.0 (+https://scrapy.org)",
+        ]
+
+        for ua in user_agents:
+            with self.subTest(user_agent=ua):
+                self.assertIsNotNone(pattern.search(ua))
+
+    def test_generated_regex_does_not_match_non_ai_user_agents(self):
+        from pathlib import Path
+        robots_json_path = Path(__file__).parent.parent / "robots.json"
+        if robots_json_path.exists():
+            with open(robots_json_path, "rt", encoding="utf-8") as f:
+                robots_dict = json.load(f)
+        else:
+            robots_dict = self.loadJson("test_files/robots.json")
+
+        pattern = re.compile(list_to_pcre(robots_dict), re.IGNORECASE)
+
+        non_ai_user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+            "Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+            "curl/7.68.0",
+            "Wget/1.20.3 (linux-gnu)",
+            "NotCursor/1.0",
+            "CursorNot/1.0",
+            "NotScrapy/2.0",
+            "ScrapyNot/2.0",
+            "NotClaude/1.0",
+            "ClaudeNot/1.0",
+            "NotPerplexity/1.0",
+            "NotAmazonbot/1.0",
+            "NotApplebot/1.0",
+            "NotBytespider/1.0",
+            # Real-world user agents that embed a listed bot name mid-string.
+            # These older Internet Explorer / Trident agents contain "SLCC1" or
+            # "SLCC2" (a Windows licensing component), which spans the listed
+            # agent "LCC". Reported in #208 and fixed by the word boundaries
+            # added in #260; pinned here so the specific report cannot regress.
+            "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; SLCC1; .NET CLR 2.0.50727; Media Center PC 5.0; .NET CLR 3.0.30729)",
+            "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; SLCC2; .NET CLR 2.0.50727; Media Center PC 6.0)",
+        ]
+
+        for ua in non_ai_user_agents:
+            with self.subTest(user_agent=ua):
+                self.assertIsNone(pattern.search(ua))
+
 
 class TestNginxConfigGeneration(unittest.TestCase, RobotsUnittestExtensions):
     maxDiff = 8192
@@ -112,6 +203,19 @@ class TestConsolidate(unittest.TestCase, RobotsUnittestExtensions):
         existing = {"rosie": { "description": default_value}}
         self.assertEqual("Rosie is the robot maid from The Jetsons, an American animated sitcom", 
                          consolidate(existing, "rosie", "description", "Rosie is the robot maid from The Jetsons, an American animated sitcom"))
+
+class TestExistingKey(unittest.TestCase):
+    def test_exact_match_wins(self):
+        existing = {"Rosie": {}, "rosie": {}}
+        self.assertEqual("rosie", existing_key(existing, "rosie"))
+
+    def test_matches_ignoring_case(self):
+        existing = {"Rosie": {"operator": "George Jetson"}}
+        self.assertEqual("Rosie", existing_key(existing, "rosie"))
+
+    def test_unknown_name_is_returned_unchanged(self):
+        self.assertEqual("rosie", existing_key({}, "rosie"))
+
 
 if __name__ == "__main__":
     import os

@@ -34,6 +34,25 @@ default_values = {
 }
 default_value = "Unclear at this time."
 
+def existing_key(existing_content, name: str) -> str:
+    """Return the key robots.json already uses for this agent, ignoring case.
+
+    robots.txt user-agent matching is case-insensitive, so two entries whose
+    names differ only in case are the same crawler. knownagents.com has changed
+    the capitalisation of a name before now, and keying off the scraped name
+    added a second entry rather than updating the first, which both duplicated
+    the User-agent line in every generated file and left the curated operator
+    and respect values behind on the old key.
+    """
+    if name in existing_content:
+        return name
+    lowered = name.lower()
+    for key in existing_content:
+        if key.lower() == lowered:
+            return key
+    return name
+
+
 def consolidate(existing_content, name: str, field: str, value: str) -> str:
     # New entry
     if name not in existing_content:
@@ -54,20 +73,20 @@ def load_robots_json():
     return json.loads(Path("./robots.json").read_text(encoding="utf-8"))
 
 def get_agent_soup():
-    """Retrieve current known agents from darkvisitors.com"""
+    """Retrieve current agent data from knownagents.com."""
     session = requests.Session()
     try:
-        response = session.get("https://darkvisitors.com/agents")
+        response = session.get("https://knownagents.com/agents")
     except requests.exceptions.ConnectionError:
         print(
-            "ERROR: Could not gather the current agents from https://darkvisitors.com/agents"
+            "ERROR: Could not gather the current agents from https://knownagents.com/agents"
         )
         return
     return BeautifulSoup(response.text, "html.parser")
 
 
 def updated_robots_json(soup):
-    """Update AI scraper information with data from darkvisitors."""
+    """Update AI scraper information with data from knownagents.com."""
     existing_content = load_robots_json()
 
     for section in soup.find_all("div", {"class": "agent-links-section"}):
@@ -77,12 +96,13 @@ def updated_robots_json(soup):
         for agent in section.find_all("a", href=True):
             name = agent.find("div", {"class": "agent-name"}).get_text().strip()
             name = clean_robot_name(name)
+            name = existing_key(existing_content, name)
 
             desc_tag = agent.find("div", {"class": "description"})
             if desc_tag is not None:
                 desc = desc_tag.get_text().strip()
             else:
-                desc = "Description unavailable from darkvisitors.com"
+                desc = "Description unavailable from knownagents.com"
 
             # Parse the operator information from the description if possible
             operator = default_value
@@ -92,7 +112,7 @@ def updated_robots_json(soup):
                 except Exception as e:
                     print(f"Error: {e}")
 
-            existing_content[name] = {
+            robot = {
                 "operator": consolidate(existing_content, name, "operator", operator),
                 "respect": consolidate(existing_content, name, "respect", default_value),
                 "function": consolidate(existing_content, name, "function", f"{category}"),
@@ -100,12 +120,17 @@ def updated_robots_json(soup):
                 "description": consolidate(
                     existing_content, name, 
                     "description",
-                    "{desc} More info can be found at https://darkvisitors.com{path}".format(
+                    "{desc} More info can be found at https://knownagents.com{path}".format(
                         desc = desc, 
                         path= agent['href'] if agent['href'].startswith('/') else "/".join("", "agents", agent["href"])
                     ),
                 ),
             }
+            if "has_name_and_version" in existing_content.get(name, {}):
+                robot["has_name_and_version"] = existing_content[name][
+                    "has_name_and_version"
+                ]
+            existing_content[name] = robot
 
     print(f"Total: {len(existing_content)}")
     sorted_keys = sorted(existing_content, key=lambda k: k.lower())
@@ -130,7 +155,7 @@ def clean_robot_name(name):
     return result
 
 
-def ingest_darkvisitors():
+def ingest_known_agents():
     old_robots_json = load_robots_json()
     soup = get_agent_soup()
     if soup:
@@ -167,44 +192,66 @@ def json_to_table(robots_json):
     return table
 
 
-def list_to_pcre(lst):
+def list_to_pcre(robots_json):
     # Python re is not 100% identical to PCRE which is used by Apache, but it
     # should probably be close enough in the real world for re.escape to work.
-    formatted = "|".join(map(re.escape, lst))
-    return f"({formatted})"
+    # We additionally un-escape '-' since it only requires escaping within
+    # character classes (which are also escaped and prevented here) and '/'
+    # since this is not used as the regexp delimeter in any server software.
+    def escape(pattern):
+        pattern = re.escape(pattern)
+        for c in "-/":
+            pattern = pattern.replace(fr"\{c}", c)
+        return pattern
+
+    exact_agents = "|".join(map(escape, robots_json))
+    return f"\\b({exact_agents})\\b"
 
 
 def json_to_htaccess(robot_json):
     # Creates a .htaccess filter file. It uses a regular expression to filter out
     # User agents that contain any of the blocked values.
+    # The regular expression is wrapped in parenthesis, so a leading [-!=<>] does
+    # not accidentally change which comparison type is used.
     htaccess = "RewriteEngine On\n"
-    htaccess += f"RewriteCond %{{HTTP_USER_AGENT}} {list_to_pcre(robot_json.keys())} [NC]\n"
+    htaccess += f"RewriteCond %{{HTTP_USER_AGENT}} ({list_to_pcre(robot_json)}) [NC]\n"
     htaccess += "RewriteRule !^/?robots\\.txt$ - [F]\n"
     return htaccess
 
 def json_to_nginx(robot_json):
     # Creates an Nginx config file. This config snippet can be included in
     # nginx server{} blocks to block AI bots.
-    config = f"set $block 0;\n\nif ($http_user_agent ~* \"{list_to_pcre(robot_json.keys())}\") {{\n    set $block 1;\n}}\n\nif ($request_uri = \"/robots.txt\") {{\n    set $block 0;\n}}\n\nif ($block) {{\n    return 403;\n}}"
+    # Exact User-agent matching is case-insensitive (RFC 9309 2.2.1), so this uses
+    # nginx's case-insensitive "~*" operator rather than "~".
+    config = f"set $block 0;\n\nif ($http_user_agent ~* {list_to_pcre(robot_json)!r}) {{\n    set $block 1;\n}}\n\nif ($request_uri = '/robots.txt') {{\n    set $block 0;\n}}\n\nif ($block) {{\n    return 403;\n}}"
     return config
 
 
 def json_to_lighttpd(robot_json):
     # Creates an Lighttpd config file. This config snippet can be included in
     # Lighttpd configuration global or in $HTTP conditionals to block AI bots.
-    config = f"$HTTP[\"url\"] != \"/robots.txt\" {{ $HTTP[\"user-agent\"] =~ \"{list_to_pcre(robot_json.keys())}\" {{ url.access-deny = ( \"\" ) }} }}"
+    # single quotes (as returned by repr) are not valid string delimeters, so we
+    # must manually quote it end ensure no unescaped quotes are inside.
+    # Lighttpd's "=~" is case-sensitive by default; the inline (?i) flag makes it
+    # match the case-insensitive exact matching robots.txt itself requires.
+    escaped_quotes = ("(?i)" + list_to_pcre(robot_json)).replace('"', '\\"')
+    config = f'$HTTP["url"] != "/robots.txt" {{ $HTTP["user-agent"] =~ "{escaped_quotes}" {{ url.access-deny = ( "" ) }} }}'
     return config
 
 
 def json_to_caddy(robot_json):
+    # single quotes (as returned by repr) are not valid string delimeters, so we
+    # must manually quote it end ensure no unescaped quotes are inside.
+    # Same case-insensitivity note as lighttpd; Caddy's RE2 engine also honours (?i).
+    escaped_quotes = ("(?i)" + list_to_pcre(robot_json)).replace('"', '\\"')
     caddyfile = "@aibots {\n    "
-    caddyfile += f'    header_regexp User-Agent "{list_to_pcre(robot_json.keys())}"'
+    caddyfile += f'    header_regexp User-Agent "{escaped_quotes}"'
     caddyfile += "\n}"
     return caddyfile
 
 def json_to_haproxy(robots_json):
     # Creates a source file for HAProxy. Follow instructions in the README to implement it.
-    txt = "\n".join(f"{k}" for k in robots_json.keys())
+    txt = "\n".join(robots_json.keys())
     return txt
 
 
@@ -255,8 +302,7 @@ def conversions():
 
 if __name__ == "__main__":
     import argparse
-
-    parser = argparse.ArgumentParser()
+    
     parser = argparse.ArgumentParser(
         prog="ai-robots",
         description="Collects and updates information about web scrapers of AI companies.",
@@ -265,7 +311,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--update",
         action="store_true",
-        help="Update the robots.json file with data from darkvisitors.com/agents",
+        help="Update the robots.json file with data from knownagents.com/agents",
     )
     parser.add_argument(
         "--convert",
@@ -279,6 +325,6 @@ if __name__ == "__main__":
         parser.print_help()
 
     if args.update:
-        ingest_darkvisitors()
+        ingest_known_agents()
     if args.convert:
         conversions()
