@@ -209,10 +209,6 @@
     "last_changed": "2022-04-27"
   },
   {
-    "pattern": "cfnetwork",
-    "last_changed": "2017-08-08"
-  },
-  {
     "pattern": "checklink",
     "last_changed": "2017-08-08"
   },
@@ -274,7 +270,7 @@
     "last_changed": "2017-08-08"
   },
   {
-    "pattern": "core",
+    "pattern": "^(?!.*\\b(?:qqbrowser|huaweibrowser)\\/).*core",
     "last_changed": "2017-08-08"
   },
   {
@@ -294,7 +290,7 @@
     "url": "https://github.com/let4be/crusty"
   },
   {
-    "pattern": "curl\\/",
+    "pattern": "^(?!Httpful\\/).*curl\\/",
     "last_changed": "2017-08-08"
   },
   {
@@ -563,7 +559,7 @@
     "last_changed": "2017-08-08"
   },
   {
-    "pattern": "http.?client",
+    "pattern": "^(?!.*(?:laminas|zend)).*http.?client",
     "last_changed": "2017-08-08"
   },
   {
@@ -818,10 +814,6 @@
     "last_changed": "2017-08-08"
   },
   {
-    "pattern": "^Mozilla.5\\.0$",
-    "last_changed": "2017-08-08"
-  },
-  {
     "pattern": "^Mozilla\\/5.0\\+\\(compatible;\\+MSIE\\+6\\.0;\\+Windows\\+NT\\+5\\.0\\)$",
     "last_changed": "2017-08-08"
   },
@@ -963,7 +955,7 @@
     "last_changed": "2017-08-08"
   },
   {
-    "pattern": "PHP\\/",
+    "pattern": "^(?!Httpful\\/).*PHP\\/",
     "last_changed": "2017-08-08"
   },
   {
@@ -1198,7 +1190,7 @@
   {
     "pattern": "^unknown$",
     "last_changed": "2017-08-08"
-  },
+  },  
   {
     "pattern": "Unpaywall",
     "last_changed": "2019-07-31"
